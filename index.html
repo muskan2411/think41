@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Image Smoothing Filter UI</title>
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    canvas { border: 1px solid black; margin-right: 20px; }
+    #controls { margin: 20px 0; }
+    .row { display: flex; flex-wrap: wrap; gap: 20px; }
+  </style>
+</head>
+<body>
+  <h2>Image Smoothing Filter UI</h2>
+
+  <input type="file" id="imageLoader" accept="image/*"/>
+  <div id="controls">
+    <label><input type="checkbox" id="grayscaleCheck"/> Convert to Grayscale First</label>
+    <label>Neighborhood Size:
+      <select id="filterSize">
+        <option value="3">3x3</option>
+        <option value="5">5x5</option>
+      </select>
+    </label>
+    <button onclick="applySmoothing()">Smooth Image</button>
+  </div>
+
+  <div class="row">
+    <div>
+      <h4>Original Image</h4>
+      <canvas id="originalCanvas"></canvas>
+      <p id="pixelValue">Hover to view RGBA</p>
+    </div>
+    <div>
+      <h4>Smoothed Image</h4>
+      <canvas id="smoothedCanvas"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const imageLoader = document.getElementById("imageLoader");
+    const originalCanvas = document.getElementById("originalCanvas");
+    const smoothedCanvas = document.getElementById("smoothedCanvas");
+    const grayscaleCheck = document.getElementById("grayscaleCheck");
+    const filterSizeSelect = document.getElementById("filterSize");
+    const pixelValueDisplay = document.getElementById("pixelValue");
+
+    const origCtx = originalCanvas.getContext("2d");
+    const smoothCtx = smoothedCanvas.getContext("2d");
+
+    let imgWidth, imgHeight;
+    let originalImageData;
+
+    imageLoader.addEventListener("change", handleImage, false);
+
+    function handleImage(e) {
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        const img = new Image();
+        img.onload = function () {
+          imgWidth = img.width;
+          imgHeight = img.height;
+          originalCanvas.width = smoothedCanvas.width = imgWidth;
+          originalCanvas.height = smoothedCanvas.height = imgHeight;
+
+          origCtx.drawImage(img, 0, 0);
+          originalImageData = origCtx.getImageData(0, 0, imgWidth, imgHeight);
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(e.target.files[0]);
+    }
+
+    function applySmoothing() {
+      let data = new Uint8ClampedArray(originalImageData.data);
+      if (grayscaleCheck.checked) {
+        for (let i = 0; i < data.length; i += 4) {
+          let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+          data[i] = data[i + 1] = data[i + 2] = avg;
+        }
+      }
+
+      const size = parseInt(filterSizeSelect.value);
+      const half = Math.floor(size / 2);
+      const smoothedData = new Uint8ClampedArray(data.length);
+
+      for (let y = 0; y < imgHeight; y++) {
+        for (let x = 0; x < imgWidth; x++) {
+          let r = 0, g = 0, b = 0, a = 0, count = 0;
+          for (let dy = -half; dy <= half; dy++) {
+            for (let dx = -half; dx <= half; dx++) {
+              const ny = y + dy;
+              const nx = x + dx;
+              if (nx >= 0 && nx < imgWidth && ny >= 0 && ny < imgHeight) {
+                const index = (ny * imgWidth + nx) * 4;
+                r += data[index];
+                g += data[index + 1];
+                b += data[index + 2];
+                a += data[index + 3];
+                count++;
+              }
+            }
+          }
+          const i = (y * imgWidth + x) * 4;
+          smoothedData[i] = r / count;
+          smoothedData[i + 1] = g / count;
+          smoothedData[i + 2] = b / count;
+          smoothedData[i + 3] = a / count;
+        }
+      }
+
+      const resultImageData = new ImageData(smoothedData, imgWidth, imgHeight);
+      smoothCtx.putImageData(resultImageData, 0, 0);
+    }
+
+    originalCanvas.addEventListener("mousemove", (e) => {
+      const rect = originalCanvas.getBoundingClientRect();
+      const x = Math.floor(e.clientX - rect.left);
+      const y = Math.floor(e.clientY - rect.top);
+      if (x >= 0 && y >= 0 && x < imgWidth && y < imgHeight) {
+        const index = (y * imgWidth + x) * 4;
+        const d = originalImageData.data;
+        pixelValueDisplay.textContent = `RGBA: (${d[index]}, ${d[index+1]}, ${d[index+2]}, ${d[index+3]})`;
+      }
+    });
+  </script>
+</body>
+</html>
